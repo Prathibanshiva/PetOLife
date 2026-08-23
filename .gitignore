@@ -1,0 +1,25 @@
+# Python
+.venv/
+backend/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Node / Vite
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Environment files
+.env
+backend/.env
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

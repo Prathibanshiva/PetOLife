@@ -1,0 +1,1 @@
+"""PawTrail FastAPI application package."""
