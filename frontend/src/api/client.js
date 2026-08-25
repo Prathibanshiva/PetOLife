@@ -71,6 +71,9 @@ export const deletePet = (petId) => request(`/pets/${petId}`, { method: 'DELETE'
 export const getRecords = (petId, type) =>
   request(`/pets/${petId}/records${type ? `?type=${type}` : ''}`)
 
+export const getHealthSummary = (petId) =>
+  request(`/pets/${petId}/records/summary`)
+
 export const createRecord = (petId, record) =>
   request(`/pets/${petId}/records`, { method: 'POST', body: JSON.stringify(record) })
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth_deps import get_current_user
 from app.database import get_connection
-from app.gemini import generate_health_signals
+from app.gemini import generate_health_signals, generate_health_summary
 from app.models import HealthRecordCreate, HealthRecordResponse, RecordType
 
 
@@ -186,6 +186,39 @@ def create_record(
 
     return created_record
 
+@router.get("/summary")
+def get_ai_health_summary(
+    pet_id: int,
+    current_user: Annotated[dict, Depends(get_current_user)] = None,
+) -> dict:
+    """Generate an AI summary of the pet's documented health history."""
+    pet = ensure_pet_exists_and_check_access(pet_id, current_user)
+
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT {RECORD_COLUMNS}
+            FROM health_records
+            WHERE pet_id = %s
+            ORDER BY record_date ASC, id ASC
+            """,
+            (pet_id,),
+        )
+        records = [dict(row) for row in cur.fetchall()]
+
+    summary = generate_health_summary(pet, records)
+
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI health summary is temporarily unavailable.",
+        )
+
+    return {
+        "pet_id": pet_id,
+        "summary": summary,
+        "record_count": len(records),
+    }
 
 @router.get("/{record_id}", response_model=HealthRecordResponse)
 def get_record(

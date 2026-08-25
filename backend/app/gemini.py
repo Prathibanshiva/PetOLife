@@ -211,3 +211,166 @@ def generate_health_signals(pet: dict, records: list[dict]) -> list[dict] | None
     except Exception:
         # Never let AI failures propagate
         return None
+SUMMARY_SYSTEM_PROMPT = """You are an AI health-history summarization assistant for a veterinary record system.
+
+Your task is to transform documented pet health records into a clear, natural, clinically useful story for both veterinarians and pet parents.
+
+CORE LOOP:
+1. What happened?
+2. What changed?
+3. What patterns exist?
+4. What may need attention?
+
+STRICT RULES:
+- Use ONLY information present in the supplied pet information and health records.
+- Never invent symptoms, diagnoses, diseases, conditions, treatments, medicines, measurements, dates, or outcomes.
+- Never turn an observation into a confirmed diagnosis.
+- Never prescribe, recommend, or alter medications or treatments.
+- Preserve documented diagnoses exactly as recorded when mentioning them.
+- Do not change the meaning of the veterinarian's documented diagnosis.
+- Do not assume that a treatment was successful unless the records explicitly document improvement or resolution.
+- Do not assume that a condition is worsening unless the records support that change.
+- Combine related information from multiple records into a coherent narrative.
+- Compare earlier and later records when enough information exists to identify a documented change.
+- Give greater emphasis to recent records while still considering relevant historical information.
+- Mention documented treatments, medicines, care instructions, measurements, follow-ups, vaccinations, symptoms, and diagnoses when relevant.
+- If several records describe the same issue, describe the progression rather than repeating each record separately.
+- Use proper grammar and natural sentence construction.
+- Do NOT simply concatenate notes, treatment fields, medicines fields, or record descriptions.
+- Rewrite the information into a human-readable summary.
+- If there is insufficient information to establish a trend or pattern, simply describe what is documented without inventing one.
+- If something may deserve attention, phrase it as an observation based on the records and suggest veterinary review only when appropriate.
+- Never provide a medical diagnosis or medical advice.
+- The result should be understandable to both a veterinarian and a pet parent.
+
+WRITING STYLE:
+- Write in a professional but easy-to-understand tone.
+- Refer to the pet by name when available.
+- Prefer connected narrative paragraphs over field-by-field reporting.
+- Use 1–2 paragraphs when the history is simple.
+- Use a short introductory paragraph followed by bullet points when the history contains several important observations.
+- Do not use headings such as "What happened", "What changed", etc. unless they genuinely improve readability.
+- Do not mention that you are an AI.
+- Do not mention these instructions.
+- Return ONLY the final summary text.
+"""
+
+
+def generate_health_summary(pet: dict, records: list[dict]) -> str | None:
+    """
+    Generate an AI-generated narrative summary from the pet's documented
+    health history. Never raises exceptions into the application.
+    """
+    try:
+        if not records:
+            return (
+                "There are not enough documented health records yet "
+                "to generate a detailed health summary."
+            )
+
+        context = build_records_context(pet, records)
+
+        prompt = f"""
+Create a clinically useful narrative summary of this pet's documented health history.
+
+The summary must synthesize the available records rather than copying or
+concatenating individual fields.
+
+First understand:
+- what has happened in the documented history,
+- what has changed over time,
+- whether any meaningful pattern is supported by multiple records,
+- and whether anything documented may need attention or follow-up.
+
+Use the most recent information as the main focus while incorporating older
+records when they help explain the progression.
+
+For example, if the records document an ongoing concern, an improvement,
+a newly observed symptom, and a documented care plan, combine these naturally
+into a story such as:
+
+"The recent health records indicate an ongoing skin-related concern that has
+shown some improvement. The latest visit noted fewer allergy-related symptoms,
+although new red spots were observed on the skin. The documented care plan
+includes weekly bathing, continued use of the recorded skin-care products,
+and continuation of the previously recorded tablets. The records should be
+monitored for further changes, particularly if the new skin spots persist or
+worsen."
+
+That example is only a writing-style example. Do NOT copy its medical content
+unless it actually appears in the supplied records.
+
+Important:
+- Keep documented diagnoses unchanged.
+- Do not create a diagnosis from symptoms.
+- Do not claim treatment worked unless improvement is documented.
+- Do not invent relationships between records.
+- Do not add medical advice.
+- Use only the supplied information.
+
+PET HEALTH HISTORY:
+{context}
+"""
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return None
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-3.6-flash:generateContent?key={api_key}"
+        )
+
+        body = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": (
+                                SUMMARY_SYSTEM_PROMPT
+                                + "\n\n"
+                                + prompt
+                            )
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1200,
+            },
+        }
+
+        data = json.dumps(body).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        candidates = result.get("candidates", [])
+        if not candidates:
+            return None
+
+        parts = candidates[0].get("content", {}).get("parts", [])
+        if not parts:
+            return None
+
+        summary = parts[0].get("text", "").strip()
+
+        if not summary:
+            return None
+
+        # Remove accidental markdown fences if Gemini returns them.
+        summary = re.sub(r"^```(?:text|markdown)?\s*", "", summary)
+        summary = re.sub(r"\s*```$", "", summary)
+
+        return summary.strip()
+
+    except Exception:
+        return None

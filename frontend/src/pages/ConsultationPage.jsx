@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getVisit, getRecords, createRecord, completeVisit } from '../api/client.js'
+import {
+  getVisit,
+  getRecords,
+  getHealthSummary,
+  createRecord,
+  completeVisit,
+} from '../api/client.js'
 import PetSummaryCard from '../components/PetSummaryCard.jsx'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -125,6 +131,8 @@ export default function ConsultationPage() {
   const { visitId } = useParams()
   const navigate = useNavigate()
   const [visit, setVisit] = useState(null)
+  const [healthSummary, setHealthSummary] = useState('')
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const [records, setRecords] = useState({}) // petId → records[]
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
@@ -152,6 +160,37 @@ export default function ConsultationPage() {
   }, [visitId])
 
   useEffect(() => { load() }, [load])
+    useEffect(() => {
+    if (!activePetId || status !== 'ready') return
+
+    let cancelled = false
+
+    const loadHealthSummary = async () => {
+      setSummaryLoading(true)
+
+      try {
+        const result = await getHealthSummary(activePetId)
+
+        if (!cancelled) {
+          setHealthSummary(result.summary || '')
+        }
+      } catch {
+        if (!cancelled) {
+          setHealthSummary('')
+        }
+      } finally {
+        if (!cancelled) {
+          setSummaryLoading(false)
+        }
+      }
+    }
+
+    loadHealthSummary()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activePetId, status])
 
   if (status === 'loading') {
     return (
@@ -214,16 +253,6 @@ const previousConsultation = petRecords
   )[0]
 
 const lastRecord = petRecords.find(r => r.record_date)
-
-const previousVisitSummary = previousConsultation
-  ? [
-      previousConsultation.notes,
-      previousConsultation.treatment,
-      previousConsultation.medicines,
-    ]
-      .filter(Boolean)
-      .join(' ')
-  : ''
   return (
     <main className="page-shell">
       <header className="page-header">
@@ -344,27 +373,34 @@ const previousVisitSummary = previousConsultation
                 activePet && (
           <>
             {previousConsultation && (
-              <section className="status-card" style={{ marginTop: 20 }}>
-                <p className="eyebrow">PREVIOUS VISIT</p>
+  <section className="status-card" style={{ marginTop: 20 }}>
+    <p className="eyebrow">AI HEALTH SUMMARY</p>
 
-                <h3>
-                  Last consultation — {previousConsultation.record_date}
-                </h3>
+    <h3>
+      Pet health overview
+    </h3>
 
-                {previousVisitSummary && (
-                  <p>
-                    <strong>Summary:</strong> {previousVisitSummary}
-                  </p>
-                )}
+    {summaryLoading ? (
+      <p>Generating AI health summary...</p>
+    ) : healthSummary ? (
+      <p style={{ lineHeight: 1.7 }}>
+        {healthSummary}
+      </p>
+    ) : (
+      <p>
+        There is not enough documented health information yet to generate a
+        detailed summary.
+      </p>
+    )}
 
-                {previousConsultation.diagnosis && (
-                  <p>
-                    <strong>Previous diagnosis:</strong>{' '}
-                    {previousConsultation.diagnosis}
-                  </p>
-                )}
-              </section>
-            )}
+    {previousConsultation.diagnosis && (
+      <p>
+        <strong>Previous diagnosis:</strong>{' '}
+        {previousConsultation.diagnosis}
+      </p>
+    )}
+  </section>
+)}
 
             <ConsultForm
               pet={activePet}
