@@ -4,6 +4,7 @@ const labels = {
   weight: 'Weight',
   medication: 'Medication',
   symptom: 'Symptom / Note',
+  consultation: 'Consultation',
 }
 
 const formatDate = (value) =>
@@ -14,17 +15,10 @@ const formatDate = (value) =>
   }).format(new Date(`${value}T00:00:00`))
 
 function canDeleteRecord(record) {
-  if (!record.created_at) {
-    return false
-  }
-
+  if (!record.created_at) return false
   const createdAt = new Date(record.created_at)
   const now = new Date()
-
-  const ageInMilliseconds = now.getTime() - createdAt.getTime()
-  const twentyFourHours = 24 * 60 * 60 * 1000
-
-  return ageInMilliseconds >= 0 && ageInMilliseconds <= twentyFourHours
+  return now - createdAt <= 24 * 60 * 60 * 1000
 }
 
 export default function RecordCard({ record, onEdit, onDelete }) {
@@ -34,22 +28,15 @@ export default function RecordCard({ record, onEdit, onDelete }) {
       : record.record_type === 'vaccination'
         ? record.vaccine_name
         : record.record_type === 'medication'
-          ? [record.medication_name, record.dosage]
-              .filter(Boolean)
-              .join(' · ')
+          ? [record.medication_name, record.dosage].filter(Boolean).join(' · ')
           : ''
 
-  const showDelete = canDeleteRecord(record)
+  const showDelete = onDelete && canDeleteRecord(record)
+  const showEdit = Boolean(onEdit)
 
   function handleDelete() {
-    const confirmed = window.confirm(
-      'Delete this health record? This action cannot be undone.'
-    )
-
-    if (!confirmed) {
-      return
-    }
-
+    const confirmed = window.confirm('Delete this health record? This action cannot be undone.')
+    if (!confirmed) return
     onDelete(record)
   }
 
@@ -62,40 +49,36 @@ export default function RecordCard({ record, onEdit, onDelete }) {
 
       <div className="record-card-body">
         {detail && <h3>{detail}</h3>}
-
-        {record.title && (
-          <p className="record-title">{record.title}</p>
-        )}
+        {record.title && <p className="record-title">{record.title}</p>}
 
         {record.record_type === 'vaccination' && record.next_due_date && (
-          <p className="record-extra">
-            Next due: {formatDate(record.next_due_date)}
-          </p>
+          <p className="record-extra">Next due: {formatDate(record.next_due_date)}</p>
         )}
 
-        {record.notes && (
-          <p className="record-notes">{record.notes}</p>
+        {record.notes && <p className="record-notes">{record.notes}</p>}
+
+        {(showEdit || showDelete) && (
+          <div className="record-actions">
+            {showEdit && (
+              <button
+                className="record-action-button"
+                type="button"
+                onClick={() => onEdit(record)}
+              >
+                Edit
+              </button>
+            )}
+            {showDelete && (
+              <button
+                className="record-action-button record-delete-action"
+                type="button"
+                onClick={handleDelete}
+              >
+                Delete
+              </button>
+            )}
+          </div>
         )}
-
-        <div className="record-actions">
-          <button
-            className="record-action-button"
-            type="button"
-            onClick={() => onEdit(record)}
-          >
-            Edit
-          </button>
-
-          {showDelete && (
-            <button
-              className="record-action-button record-delete-action"
-              type="button"
-              onClick={handleDelete}
-            >
-              Delete
-            </button>
-          )}
-        </div>
       </div>
     </article>
   )

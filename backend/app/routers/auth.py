@@ -118,7 +118,7 @@ def verify_otp(request: OTPVerifyRequest) -> dict:
 
         cursor.execute(
             """
-            SELECT id, role
+            SELECT id, role, name
             FROM users
             WHERE phone = %s
             LIMIT 1
@@ -132,7 +132,7 @@ def verify_otp(request: OTPVerifyRequest) -> dict:
                 """
                 INSERT INTO users (phone, role)
                 VALUES (%s, %s)
-                RETURNING id, role
+                RETURNING id, role, name
                 """,
                 (request.phone, "owner"),
             )
@@ -154,4 +154,5 @@ def verify_otp(request: OTPVerifyRequest) -> dict:
         "token": token,
         "user_id": user["id"],
         "role": user["role"],
+        "name": user["name"],
     }

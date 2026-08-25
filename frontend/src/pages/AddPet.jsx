@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { createPet } from '../api/pets'
+import { createPet } from '../api/client.js'
 
 const initialForm = {
   name: '',

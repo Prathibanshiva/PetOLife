@@ -23,3 +23,6 @@ backend/.env
 *~
 .DS_Store
 Thumbs.db
+
+# Local test state / development tokens
+test_state.json
